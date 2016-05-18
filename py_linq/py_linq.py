@@ -1,9 +1,39 @@
 __author__ = 'ViraLogic Software'
+# https://github.com/viralogic/py-enumerable
+
+# Implementation changes:
+#   + removed __init__.py to reflect py3 changes around importing and __init__.py 
+#     (see '(removed)__init__.py' for details). Though this work around may need to be rolled back
+#     when packaging for pip. 
+#   + fixed intercept
+#   + used built-in map
+#   + added implicit Enumerable wrapping
+#   + work around for dicts being no longer sortable: "unorderable types: dict() < dict()"
+#   + fixes 'last' (removed pre-ordering)
+#   + fixes in unit testing infrastructure
+#   + fixed 'def intersect' error: "sublist parameters are not supported in 3.x"
+#   + implemented 'reverse' 
+#   + implemented 'foreach' 
+#
+# Unit tests
+#   + updated u.tests to reflect py3 changes for dict ordering and implicit Enumerable wrapping
+#   - 'reverse' u.test
+#   - 'foreach' u.test
 
 import itertools
-from exceptions import *
+#import exceptions
 
 class Enumerable(object):
+    
+    def _ensureEnumerable(enumerable, argName='enumerable'):
+        if not isinstance(enumerable, Enumerable):
+            if hasattr(enumerable, "__iter__"):
+                return Enumerable(enumerable)
+            else:
+                raise TypeError("the input " + argName + " must be must be an enumerable or an instance of Enumerable")
+        else:
+            return enumerable
+
     def __init__(self, data=[]):
         """
         Constructor
@@ -38,6 +68,25 @@ class Enumerable(object):
         :return: integer object
         """
         return sum(1 for element in self)
+   
+    def reverse(self):
+        """
+        Reverses the elements in iterable
+        :return: new Enumerable object containing transformed data
+        """
+        return Enumerable(reversed(self._data))
+   
+    def foreach(self, action):
+        """
+        Iterates throug all elements an invokes the action for every single one of them.
+        This method doesn't exactly follow the "immutability paradigm" but it's just sometime very convenient. 
+        Usage:
+            items.foreach(print)
+        :return: the original iterable object
+        """
+        for x in self._data:
+            action(x)
+        return self
 
     def select(self, func=lambda x: x):
         """
@@ -45,7 +94,7 @@ class Enumerable(object):
         :param func: lambda expression on how to perform transformation
         :return: new Enumerable object containing transformed data
         """
-        return Enumerable(itertools.imap(func, self))
+        return Enumerable(map(func, self))
 
 
     def sum(self, func=lambda x: x):
@@ -85,7 +134,7 @@ class Enumerable(object):
         count = self.count()
         if count == 0:
             raise NoElementsError("Iterable contains no elements")
-        return float(self.sum(func))/float(count)
+        return float(self.sum(func)) / float(count)
 
     def median(self, func=lambda x: x):
         """
@@ -98,7 +147,7 @@ class Enumerable(object):
         result = self.order_by(func).select(func).to_list()
         length = len(result)
         i = int(length / 2)
-        return result[i] if length % 2 == 1 else (float(result[i - 1]) + float(result[i]))/ float(2)
+        return result[i] if length % 2 == 1 else (float(result[i - 1]) + float(result[i])) / float(2)
 
     def elementAt(self, n):
         """
@@ -107,7 +156,7 @@ class Enumerable(object):
         :param n: index as int object
         :return: Element at given index
         """
-        result = list(itertools.islice(self.to_list(), max(0, n), n+1, 1))
+        result = list(itertools.islice(self.to_list(), max(0, n), n + 1, 1))
         if len(result) == 0:
             raise NoElementsError("No element found at index {0}".format(n))
         return result[0]
@@ -144,7 +193,14 @@ class Enumerable(object):
         :param func: lambda expression to transform data
         :return: data element as object or NoElementsError if transformed data contains no elements
         """
-        return Enumerable(sorted(self, None, reverse=True)).first()
+        # not convinced sorting is appropriate here; thus accessing last of arbitrary unsorted 
+        # collection would produce wrong result
+        #return Enumerable(sorted(self, key=None, reverse=True)).first() 
+        count = self.count()
+        if count == 0:
+            raise NoElementsError("Iterable contains no elements")
+        result = self._data[-1]
+        return result;
 
     def last_or_default(self):
         """
@@ -152,7 +208,11 @@ class Enumerable(object):
         :param func: lambda expression to transform data
         :return: data element as object or None if transformed data contains no elements
         """
-        return Enumerable(sorted(self, None, reverse=True)).first_or_default()
+        count = self.count()
+        if count == 0:
+            return None
+        result = self._data[-1]
+        return result;
 
     def order_by(self, key):
         """
@@ -198,7 +258,7 @@ class Enumerable(object):
         """
         if predicate is None:
             raise NullArgumentError("No predicate given for where clause")
-        return Enumerable(itertools.ifilter(predicate, self))
+        return Enumerable(filter(predicate, self))
 
     def single(self, predicate):
         """
@@ -259,8 +319,8 @@ class Enumerable(object):
         :param enumerable: An iterable object
         :return: new Enumerable object
         """
-        if not isinstance(enumerable, Enumerable):
-            raise TypeError("enumerable argument must be an instance of Enumerable")
+        enumerable = Enumerable._ensureEnumerable(enumerable)
+        
         for element in enumerable._data:
             element_type = type(element)
             if self.any(lambda x: type(x) != element_type):
@@ -295,7 +355,12 @@ class Enumerable(object):
         :return: Enumerable of grouping objects
         """
         result = []
-        ordered = sorted(self, key=key)
+        ordered = self
+        try:
+            ordered = sorted(self, key=key)
+        except TypeError:
+            pass # in Python 3 dictionaries are no longer sortable so just continue unsorted
+
         grouped = itertools.groupby(ordered, key)
         for k, g in grouped:
             can_enumerate = isinstance(k, list) or isinstance(k, tuple) and len(k) > 0
@@ -323,14 +388,11 @@ class Enumerable(object):
         :param result_func: lambda expression to transform result of join
         :return: new Enumerable object
         """
-        if not isinstance(inner_enumerable, Enumerable):
-            raise TypeError("inner_enumerable parameter must be an instance of Enumerable")
-        return Enumerable(
-            itertools.product(
-                itertools.ifilter(lambda x: outer_key(x) in itertools.imap(inner_key, inner_enumerable), self),
-                itertools.ifilter(lambda y: inner_key(y) in itertools.imap(outer_key, self), inner_enumerable)
-            )
-        ).where(lambda x: outer_key(x[0]) == inner_key(x[1])).select(result_func)
+        inner_enumerable = Enumerable._ensureEnumerable(inner_enumerable, 'inner_enumerable')
+        return Enumerable(itertools.product(filter(lambda x: outer_key(x) in map(inner_key, inner_enumerable), self),
+                          filter(lambda y: inner_key(y) in map(outer_key, self), inner_enumerable)))\
+                         .where(lambda x: outer_key(x[0]) == inner_key(x[1]))\
+                         .select(result_func)
 
     def default_if_empty(self, value=None):
         """
@@ -350,18 +412,16 @@ class Enumerable(object):
         :param result_func: lambda expression to transform the result of group join
         :return: new Enumerable object
         """
-        if not isinstance(inner_enumerable, Enumerable):
-            raise TypeError("inner enumerable parameter must be an instance of Enumerable")
-        return Enumerable(
-            itertools.product(
-                self,
-                inner_enumerable.default_if_empty()
-            )
-        ).group_by(key_names=['id'], key=lambda x: outer_key(x[0]), result_func=lambda g: (g.first()[0], g.where(lambda x: inner_key(x[1]) == g.key.id).select(lambda x: x[1]))).\
-        select(result_func)
+        inner_enumerable = Enumerable._ensureEnumerable(inner_enumerable, "inner enumerable")
+        return Enumerable(itertools.product(self, inner_enumerable.default_if_empty()))\
+                      .group_by(key_names=['id'], \
+                                key=lambda x: outer_key(x[0]), \
+                                result_func=lambda g: (g.first()[0], g.where(lambda x: inner_key(x[1]) == g.key.id)\
+                                                                      .select(lambda x: x[1])))\
+                      .select(result_func)
 
 
-    def any(self, predicate):
+    def any(self, predicate=lambda x: x):
         """
         Returns true if any elements that satisfy predicate are found
         :param predicate: condition to satisfy as lambda expression
@@ -378,9 +438,8 @@ class Enumerable(object):
         :param key: key selector as lambda expression
         :return: new Enumerable object
         """
-        if not isinstance(enumerable, Enumerable):
-            raise TypeError("enumerable parameter must be an instance of Enumerable")
-        return self.join(enumerable, key, key, result_func=lambda (x, y): x)
+        enumerable = Enumerable._ensureEnumerable(enumerable)
+        return self.join(enumerable, key, key, result_func=lambda x: x).distinct().select(lambda x: x[0])
 
 
     def union(self, enumerable, key=lambda x: x):
@@ -390,8 +449,7 @@ class Enumerable(object):
         :param key: key selector used to determine uniqueness
         :return: new Enumerable object
         """
-        if not isinstance(enumerable, Enumerable):
-            raise TypeError("enumerable parameter must be an instance of Enumerable")
+        enumerable = Enumerable._ensureEnumerable(enumerable)
         return self.concat(enumerable).distinct(key)
 
     def except_(self, enumerable, key=lambda x: x):
@@ -401,15 +459,9 @@ class Enumerable(object):
         :param key: key selector as lambda expression
         :return: new Enumerable object
         """
-        if not isinstance(enumerable, Enumerable):
-            raise TypeError("enumerable parameter must be an instance of Enumerable")
+        enumerable = Enumerable._ensureEnumerable(enumerable)
         membership = (0 if key(element) in enumerable.intersect(self).select(key) else 1 for element in self)
-        return Enumerable(
-            itertools.compress(
-                self,
-                membership
-            )
-        )
+        return Enumerable(itertools.compress(self, membership))
 
     def contains(self, element, key=lambda x: x):
         """
@@ -453,4 +505,16 @@ class Grouping(Enumerable):
             'enumerable': self._data.__repr__()
         }.__repr__()
 
+class NoElementsError(Exception): pass
+class NullArgumentError(Exception): pass
+class NoMatchingElement(Exception): pass
+class MoreThanOneMatchingElement(Exception): pass
 
+class linq(Enumerable): 
+    def __init__(self, data=[]): 
+        super().__init__(data)
+        pass
+class lnq(Enumerable): 
+    def __init__(self, data=[]): 
+        super().__init__(data)
+        pass
