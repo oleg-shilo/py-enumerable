@@ -70,6 +70,9 @@ class TestFunctions(TestCase):
         self.assertEqual(self.empty.first_or_default(), None, "First or default should be None")
         self.assertIsInstance(self.simple.first(), int, "First element in simple enumerable is int")
         self.assertEqual(self.simple.first(), 1, "First element in simple enumerable is 1")
+        
+        self.assertEqual(self.simple.first(lambda x: x == 2), 2, "First element in simple enumerable that is equal 2 is 2")
+
         self.assertEqual(self.simple.first(), self.simple.first_or_default(), "First and first or default should equal")
         self.assertIsInstance(self.complex.first(), dict, "First element in complex enumerable is dict")
         self.assertDictEqual(self.complex.first(), {'value': 1}, "First element in complex enumerable is not correct dict")
@@ -86,7 +89,9 @@ class TestFunctions(TestCase):
         self.assertDictEqual(self.complex.last(), {'value': 3}, "Last element in complex enumerable is not correct dict")
         self.assertDictEqual(self.complex.last(), self.complex.last_or_default(), "Last and last or default should equal")
         
-        self.assertEqual(self.simple.last(), self.complex.select(lambda x: x['value']).last(), "Last values in simple and complex should equal")
+        #ordered = self.complex.select(lambda x: x['value']).order_by(itself).last()
+
+        self.assertEqual(self.simple.last(), self.complex.select(lambda x: x['value']).order_by(itself).last(), "Last values in simple and complex should equal")
 
     def test_sort(self):
         self.assertRaises(NullArgumentError, self.simple.order_by, None)

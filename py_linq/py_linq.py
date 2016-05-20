@@ -173,24 +173,41 @@ class Enumerable(object):
         except NoElementsError:
             return None
 
-    def first(self):
+    def first(self, key=None):
         """
         Returns the first element
+        :param func: lambda expression to test data
         :return: data element as object or NoElementsError if transformed data contains no elements
         """
-        return self.elementAt(0)
+        count = self.count()
+        if count == 0:
+            raise NoElementsError("Iterable contains no elements")
 
-    def first_or_default(self):
+        if key:
+            for item in self._data:
+                if key(item):
+                    return item;
+            raise NoElementsError("Iterable contains no elements")
+        else:
+            return self.elementAt(0)
+
+    def first_or_default(self, key=None):
         """
         Return the first element
         :return: data element as object or None if transformed data contains no elements
         """
-        return self.elementAtOrDefault(0)
+        if key :
+            for item in self._data:
+                if key(item):
+                    return item;
+            return None
+        else:
+            return self.elementAtOrDefault(0)
 
-    def last(self):
+    def last(self, key=None):
         """
         Return the last element
-        :param func: lambda expression to transform data
+        :param func: lambda expression to test data
         :return: data element as object or NoElementsError if transformed data contains no elements
         """
         # not convinced sorting is appropriate here; thus accessing last of arbitrary unsorted 
@@ -199,20 +216,24 @@ class Enumerable(object):
         count = self.count()
         if count == 0:
             raise NoElementsError("Iterable contains no elements")
-        result = self._data[-1]
-        return result;
+        #result = self._data[-1]
+        #return result;
+        for item in reversed(self._data):
+            if key is None or key(item):
+                return item
+        raise NoElementsError("Iterable contains no elements")
+            
 
-    def last_or_default(self):
+    def last_or_default(self, key=None):
         """
         Return the last element
-        :param func: lambda expression to transform data
+        :param func: lambda expression to test data
         :return: data element as object or None if transformed data contains no elements
         """
-        count = self.count()
-        if count == 0:
-            return None
-        result = self._data[-1]
-        return result;
+        for item in reversed(self._data):
+            if key is None or key(item):
+                return item
+        return None
 
     def order_by(self, key):
         """
@@ -510,11 +531,12 @@ class NullArgumentError(Exception): pass
 class NoMatchingElement(Exception): pass
 class MoreThanOneMatchingElement(Exception): pass
 
-class linq(Enumerable): 
-    def __init__(self, data=[]): 
-        super().__init__(data)
-        pass
-class lnq(Enumerable): 
+itself = lambda x:x
+
+class qlist(Enumerable): 
+    """
+        Sort named version of py_linq.Enumerable. It stands for 'queryable list'.
+    """
     def __init__(self, data=[]): 
         super().__init__(data)
         pass
