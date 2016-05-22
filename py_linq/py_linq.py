@@ -531,6 +531,7 @@ class NullArgumentError(Exception): pass
 class NoMatchingElement(Exception): pass
 class MoreThanOneMatchingElement(Exception): pass
 
+x2x = lambda x:x
 itself = lambda x:x
 
 class qlist(Enumerable): 

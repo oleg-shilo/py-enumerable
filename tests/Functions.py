@@ -89,7 +89,9 @@ class TestFunctions(TestCase):
         self.assertDictEqual(self.complex.last(), {'value': 3}, "Last element in complex enumerable is not correct dict")
         self.assertDictEqual(self.complex.last(), self.complex.last_or_default(), "Last and last or default should equal")
         
-        #ordered = self.complex.select(lambda x: x['value']).order_by(itself).last()
+        
+        self.assertEqual(self.simple.last(lambda x: x == 2), 2, "Last element in simple enumerable that is equal 2 is 2")
+                
 
         self.assertEqual(self.simple.last(), self.complex.select(lambda x: x['value']).order_by(itself).last(), "Last values in simple and complex should equal")
 
@@ -186,6 +188,27 @@ class TestFunctions(TestCase):
 
         london = locations_grouped.single(lambda g: g.key.city == 'London' and g.key.country == 'England')
         self.assertEqual(london.sum(lambda g: g[3]), 240000, "Sum of London, England location does not equal")
+
+    def test_reverse(self):
+        self.assertListEqual(self.empty.reverse().to_list(), [], "Reverse empty enumerable yields empty list")
+        self.assertListEqual(self.simple.reverse().to_list(), [3,2,1], "Reverse simple enumerable")
+        
+        complexOriginal = self.complex.to_list()
+        complexReversed = self.complex.reverse().to_list()
+        self.assertEqual(complexOriginal[0], complexReversed[2], "Reverse complex enumerable")
+        self.assertEqual(complexOriginal[1], complexReversed[1])
+        self.assertEqual(complexOriginal[2], complexReversed[0])
+
+    def test_foreach(self):
+        self.fe_extern = 0
+        def add(x):
+            self.fe_extern = self.fe_extern + x
+
+        self.empty.foreach(add)
+        self.assertEqual(0, self.fe_extern)
+
+        self.simple.foreach(add)
+        self.assertEqual(6, self.fe_extern)
 
     def test_distinct(self):
         self.assertListEqual(self.empty.distinct().to_list(), [], "Distinct empty enumerable yields empty list")
