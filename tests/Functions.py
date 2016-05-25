@@ -93,7 +93,7 @@ class TestFunctions(TestCase):
         self.assertEqual(self.simple.last(lambda x: x == 2), 2, "Last element in simple enumerable that is equal 2 is 2")
                 
 
-        self.assertEqual(self.simple.last(), self.complex.select(lambda x: x['value']).order_by(itself).last(), "Last values in simple and complex should equal")
+        self.assertEqual(self.simple.last(), self.complex.select(lambda x: x['value']).order_by(lambda x:x).last(), "Last values in simple and complex should equal")
 
     def test_sort(self):
         self.assertRaises(NullArgumentError, self.simple.order_by, None)
